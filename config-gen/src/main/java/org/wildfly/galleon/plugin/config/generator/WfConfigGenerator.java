@@ -231,6 +231,11 @@ public class WfConfigGenerator implements ForkedEmbeddedUtil.ForkCallback {
         }
         mcc = embeddedProcess.getModelControllerClient();
         //waitForHc();
+        try {
+            TimeUnit.MILLISECONDS.sleep(50);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
     void stopEmbedded() throws ProvisioningException {
