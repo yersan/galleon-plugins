@@ -230,12 +230,7 @@ public class WfConfigGenerator implements ForkedEmbeddedUtil.ForkCallback {
             throw new ProvisioningException("Failed to start embedded hc", e);
         }
         mcc = embeddedProcess.getModelControllerClient();
-        //waitForHc();
-        try {
-            TimeUnit.MILLISECONDS.sleep(50);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        waitForHc(embeddedProcess);
     }
 
     void stopEmbedded() throws ProvisioningException {
@@ -405,38 +400,14 @@ public class WfConfigGenerator implements ForkedEmbeddedUtil.ForkCallback {
         }
     }
 
-    private void waitForHc() throws ProvisioningException {
+    private void waitForHc(EmbeddedManagedProcess embeddedProcess) throws ProvisioningException {
         if (bootTimeout == null || bootTimeout > 0) {
             long expired = bootTimeout == null ? Long.MAX_VALUE : System.nanoTime() + bootTimeout;
 
-            String status = "starting";
-
-            // read out the host controller name
-            final ModelNode getNameOp = new ModelNode();
-            getNameOp.get(ClientConstants.OP).set(ClientConstants.READ_ATTRIBUTE_OPERATION);
-            getNameOp.get(ClientConstants.NAME).set("local-host-name");
-
-            final ModelNode getStateOp = new ModelNode();
-            getStateOp.get(ClientConstants.OP).set(ClientConstants.READ_ATTRIBUTE_OPERATION);
-            ModelNode address = getStateOp.get(ClientConstants.ADDRESS);
-            getStateOp.get(ClientConstants.NAME).set(ClientConstants.HOST_STATE);
+            String status;
             do {
-                try {
-                    final ModelNode nameResponse = mcc.execute(getNameOp);
-                    if (Operations.isSuccessfulOutcome(nameResponse)) {
-                        // read out the connected HC name
-                        final String localName = nameResponse.get(ClientConstants.RESULT).asString();
-                        address.set(ClientConstants.HOST, localName);
-                        final ModelNode stateResponse = mcc.execute(getStateOp);
-                        if (Operations.isSuccessfulOutcome(stateResponse)) {
-                            status = stateResponse.get(ClientConstants.RESULT).asString();
-                        }
-                    }
-                } catch (Exception e) {
-                    // ignore and try again
-                }
-
-                if ("starting".equals(status)) {
+                status = embeddedProcess.getCurrentProcessState();
+                if (status.equals("unknown") || status.equals("starting")) {
                     try {
                         Thread.sleep(50);
                     } catch (InterruptedException e) {
@@ -448,7 +419,7 @@ public class WfConfigGenerator implements ForkedEmbeddedUtil.ForkCallback {
                 }
             } while (System.nanoTime() < expired);
 
-            if ("starting".equals(status)) {
+            if (status.equals("unknown") || status.equals("starting")) {
                 assert bootTimeout != null; // we'll assume the loop didn't run for decades
                 // Stop server and restore environment
                 stopEmbedded();
